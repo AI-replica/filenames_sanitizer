@@ -5,6 +5,14 @@ import time
 
 
 def identify_twins(paths, proposed_changes):
+    """
+    
+    >>> paths = ['/a/h::.7z', '/a/h:.7z']
+    >>> proposed_changes = {'/a/h::.7z': '/a/h_.7z', '/a/h:.7z': '/a/h_.7z'}
+    >>> twins_families = identify_twins(paths, proposed_changes)
+    >>> twins_families
+    {'/a/h::.7z': [{'filesystem_path': '/a/h::.7z', 'proposed_path': '/a/h_.7z'}, {'filesystem_path': '/a/h:.7z', 'proposed_path': '/a/h_.7z'}]}
+    """
     # Build combined_paths
     combined_paths = []
     for path in paths:
@@ -22,16 +30,19 @@ def identify_twins(paths, proposed_changes):
 
         if lower_path in path_dict:
             # We found a twin
-            existing_path = path_dict[lower_path]
+            existing_path_info = path_dict[lower_path]
+            existing_path = existing_path_info['filesystem_path']
+            # Use the existing path's filesystem and proposed paths
             if existing_path in twins_families:
                 twins_families[existing_path].append(path_info)
             else:
                 twins_families[existing_path] = [
-                    {'filesystem_path': existing_path, 'proposed_path': path_dict[lower_path]},
+                    existing_path_info,
                     path_info
                 ]
         else:
-            path_dict[lower_path] = path_info['filesystem_path']
+            # Store the entire path_info, not just the filesystem_path
+            path_dict[lower_path] = path_info
 
     return twins_families
 
@@ -154,6 +165,15 @@ def fix_twins(proposed_changes, twins_families, mock_updated_families=None, crea
     >>> updated_no_twins = fix_twins(proposed_changes, {}, {})
     >>> updated_no_twins == proposed_changes
     True
+    
+    # Test for "h:" and "h::" in the same dir (encountered in the wild)
+    >>> proposed_changes = {'/a/h::.7z': '/a/h_.7z', '/a/h:.7z': '/a/h_.7z'}
+    >>> twins_families =  {'/a/h::.7z': [{'filesystem_path': '/a/h::.7z', 'proposed_path': '/a/h_.7z'}, {'filesystem_path': '/a/h:.7z', 'proposed_path': '/a/h_.7z'}]}
+    >>> updated_changes = fix_twins(proposed_changes, twins_families, creation_times_available7=False)
+    >>> for old_path, new_path in sorted(updated_changes.items()):
+    ...     print(f"{old_path} -> {new_path}")
+    /a/h:.7z -> /a/tw0_h_.7z
+    /a/h::.7z -> /a/tw1_h_.7z
     """
     twins_families = apply_creation_times_to_twins(twins_families, creation_times_available7)
     twins_families = mock_updated_families or twins_families

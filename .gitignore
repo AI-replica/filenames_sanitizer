@@ -2,3 +2,5 @@ results/
 venv
 .idea
 .coverage
+.DS_Store
+__pycache__
