@@ -270,7 +270,7 @@ def skip_vowels(name, max_length):
     return clean_name + ending
 
 
-def shorten_name(name, max_length):
+def shorten_name(name, max_length, just_preserve_left7=False):
     """
     >>> shorten_name("Screenshot on Mac 2024-07-06 at 20.56.55 dog", 50)
     'Screenshot on Mac 2024-07-06 at 20.56.55 dog'
@@ -291,6 +291,9 @@ def shorten_name(name, max_length):
     """
     if len(name) <= max_length:
         return name
+
+    if just_preserve_left7:
+        return name[:max_length]
 
     name = to_camel_case(name, max_length, preserve_separators_between_digits7=True)
 

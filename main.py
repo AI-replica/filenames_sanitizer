@@ -23,11 +23,11 @@ TODO for future versions:
 - maybe add an optional flag: the end result must always contain only ascii letters and numbers
 - before the actual renaming ask the user: "Do you want to proceed with the actual renaming? N files will be renamed."
 - before the renaming, measure the number of files, dir size. After everythig is done, compare
-
+- optional command-line arg for max_ext_len 
 """
 
 
-def sanitize_name(name, max_length=255):
+def sanitize_name(name, max_length=255, just_preserve_left7=False):
     """
     The proper order of renaming:
     --- first, transliterate if necessary
@@ -64,6 +64,8 @@ def sanitize_name(name, max_length=255):
     'GMT+7'
     >>> sanitize_name(".~lock.canned_responses.csv#", 50)
     '.tilde_lock.canned_responses.csv_'
+    >>> sanitize_name("", 50).startswith("unnamed_")
+    True
     """
 
     name = remove_bad_chars(name)
@@ -74,9 +76,32 @@ def sanitize_name(name, max_length=255):
     """
     name = transliterate_russian_and_german(name)
 
-    name = shorten_name(name, max_length)
+    name = shorten_name(name, max_length, just_preserve_left7)
 
     return name
+
+
+def sanitize_ext(ext, max_ext_len=4):
+    """To handle cases like "Thumbs.db:encryptable"
+
+    >>> sanitize_ext(".db:encryptable")
+    '.db_e'
+    >>> sanitize_ext(".d:b")
+    '.d_b'
+    >>> sanitize_ext(".хуй")
+    '.khuj'
+    >>> sanitize_ext(".html")
+    '.html'
+    >>> sanitize_ext(".txt")
+    '.txt'
+    """
+    ext = ext.strip()
+    if len(ext) == 0:
+        res = ""
+    else:
+        # max_ext_len+1 because ext is ".txt", not just "txt"
+        res = sanitize_name(ext, max_length=max_ext_len + 1, just_preserve_left7=True)
+    return res
 
 
 def write_proposed_changes_to_file(proposed_changes, logs_dir, kind):
@@ -110,10 +135,10 @@ def write_proposed_changes_to_file(proposed_changes, logs_dir, kind):
         content += os.path.basename(new_path) + "\n"
         content += new_path + "\n"
         content += "\n"
-    
+
     with open(logs_path, "w") as f:
         f.write(content)
-    
+
     return logs_path
 
 
@@ -138,6 +163,20 @@ def cond_proposed_change(old_path, new_path, proposed_changes):
             raise_error_if_collision(old_path, new_path)
         proposed_changes[old_path] = new_path
     return proposed_changes
+
+
+def build_new_path(name, ext, parent_dir, sanitize_len):
+    """
+
+    >>> build_new_path(name="Thumbs", ext=".db:encryptable", parent_dir="some_dir", sanitize_len=50)
+    'some_dir/Thumbs.db_e'
+
+    """
+    sanitized_name = sanitize_name(name, sanitize_len)
+    sanitized_ext = sanitize_ext(ext)
+    new_name = sanitized_name + sanitized_ext
+    new_path = os.path.join(parent_dir, new_name)
+    return new_path
 
 
 def propose_sanitisations(paths, kind, max_full_name_len, replace_symlinks7=False):
@@ -189,10 +228,9 @@ def propose_sanitisations(paths, kind, max_full_name_len, replace_symlinks7=Fals
                 ext = ""
                 sanitize_len = max_full_name_len
 
-        sanitized_name = sanitize_name(name, sanitize_len)
-        new_name = sanitized_name + ext
-        new_path = os.path.join(parent_dir, new_name)
+        new_path = build_new_path(name, ext, parent_dir, sanitize_len)
         proposed_changes = cond_proposed_change(old_path, new_path, proposed_changes)
+
     return proposed_changes
 
 
@@ -235,13 +273,13 @@ def build_proposed_changes(paths, kind, max_full_name_len, replace_symlinks7=Fal
 
 
 def rename_items(
-    paths,
-    max_full_name_len,
-    logs_dir,
-    kind="files",
-    actually_rename7=False,
-    verbose7=False,
-    replace_symlinks7=False,
+        paths,
+        max_full_name_len,
+        logs_dir,
+        kind="files",
+        actually_rename7=False,
+        verbose7=False,
+        replace_symlinks7=False,
 ):
     """
     Renames files or directories based on the given parameters.
@@ -348,7 +386,7 @@ def handle_long_paths(directory_path, max_path_len, logs_dir):
 
 
 def make_renaming_preparations(
-    directory_path, where_to_copy, in_place7, max_full_name_len
+        directory_path, where_to_copy, in_place7, max_full_name_len
 ):
     """
     >>> from utils.files import delete_dir, copy_directory
@@ -394,15 +432,15 @@ def make_renaming_preparations(
 
 
 def rename_dir_with_files(
-    directory_path,
-    max_full_name_len=30,
-    max_path_len=64,
-    actually_rename7=False,
-    in_place7=False,
-    where_to_copy=None,
-    replace_symlinks7=False,
-    mock_rename_fail7=False,
-    mock_copy_fail7=False,
+        directory_path,
+        max_full_name_len=30,
+        max_path_len=64,
+        actually_rename7=False,
+        in_place7=False,
+        where_to_copy=None,
+        replace_symlinks7=False,
+        mock_rename_fail7=False,
+        mock_copy_fail7=False,
 ):
     """
     E.g. if you want to migrate to Mac, set:
@@ -614,4 +652,3 @@ def execute(mock_args=None):
 
 if __name__ == "__main__":  # pragma: no cover
     execute()
-
